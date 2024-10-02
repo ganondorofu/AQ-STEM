@@ -173,7 +173,7 @@ if __name__ == "__main__":
     # 分類クラス数
     num_classes = 15
     # エポック数
-    epochs = 250
+    epochs = 30
     # バッチサイズ
     batch_size = 16
     _main(input_shape, num_classes, epochs, batch_size)
