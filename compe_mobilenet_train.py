@@ -3,10 +3,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
+# GPUの検出と設定
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        # メモリの自動増加を有効化
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print("GPUが利用可能です。")
+        for gpu in gpus:
+            print(f"- {gpu}")
+    except RuntimeError as e:
+        print(e)
+else:
+    print("GPUが利用できません。CPUで処理を行います。")
+
 def plot_result(history):
     '''
-    plot result
-    全ての学習が終了した後に、historyを参照して、accuracyとlossをそれぞれplotする
+    学習結果をプロットする関数。
+    全ての学習が終了した後に、historyを参照して、accuracyとlossをそれぞれプロットします。
     '''
 
     # accuracy
@@ -15,7 +30,7 @@ def plot_result(history):
     plt.plot(history.history['val_acc'], label='val_acc', marker='.')
     plt.grid()
     plt.legend(loc='best')
-    plt.title('accuracy')
+    plt.title('Accuracy')
     fig_name = os.path.splitext(os.path.basename(__file__))[0] + '_accuracy.png'
     plt.savefig(fig_name)
     # plt.show()
@@ -26,15 +41,15 @@ def plot_result(history):
     plt.plot(history.history['val_loss'], label='val_loss', marker='.')
     plt.grid()
     plt.legend(loc='best')
-    plt.title('loss')
+    plt.title('Loss')
     fig_name = os.path.splitext(os.path.basename(__file__))[0] + '_loss.png'
     plt.savefig(fig_name)
     # plt.show()
 
 def create_model_mobilenet(num_classes, input_shape):
     """
-    モデル作成(MobileNet)
-    
+    MobileNetを使用したモデルの作成。
+
     Parameters
     ----------
     num_classes : int
@@ -42,26 +57,26 @@ def create_model_mobilenet(num_classes, input_shape):
     input_shape : tuple
         入力画像サイズ
     """
-    # ImageNetで事前学習したMobileNetモデルを読込
+    # ImageNetで事前学習したMobileNetモデルを読み込み
     base_model = tf.keras.applications.mobilenet.MobileNet(weights='imagenet',
                                                            include_top=False,
                                                            input_shape=input_shape)
-    # 一部の層をフリーズ解除（微調整のため）
+    # 全ての層を学習可能に設定（微調整のため）
     for layer in base_model.layers:
-        layer.trainable = True  # すべての層を学習可能に設定
+        layer.trainable = True
 
     x = base_model.output
 
-    # 平均プーリング演算
+    # 平均プーリング層
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
-    # ドロップアウトを追加（過学習防止）
+    # ドロップアウト（過学習防止）
     x = tf.keras.layers.Dropout(0.5)(x)
-    # 全結合
+    # 全結合層
     x = tf.keras.layers.Dense(128, activation='relu')(x)
     # 出力層
-    x = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
-    # モデル生成
-    model = tf.keras.models.Model(inputs=base_model.input, outputs=x)
+    outputs = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
+    # モデルの生成
+    model = tf.keras.models.Model(inputs=base_model.input, outputs=outputs)
     return model
 
 def _main(input_shape, num_classes, epochs, batch_size):
@@ -105,19 +120,20 @@ def _main(input_shape, num_classes, epochs, batch_size):
         batch_size=batch_size,
         class_mode='categorical'
     )
-    print(gen_train.class_indices)
+    print("クラスのインデックス:", gen_train.class_indices)
 
-    # 学習モデル作成
+    # 学習モデルの作成
     model = create_model_mobilenet(num_classes, input_shape=input_shape)
 
-    # 最適化アルゴリズム
+    # 最適化アルゴリズムの設定
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
 
-    # モデルの設定
+    # モデルのコンパイル
     model.compile(
         loss='categorical_crossentropy',  # 損失関数の設定
-        optimizer=optimizer,              # 最適化法の指定
-        metrics=['acc'])
+        optimizer=optimizer,              # 最適化アルゴリズムの指定
+        metrics=['acc']                   # 評価指標として精度を指定
+    )
 
     # コールバックの設定
     callbacks = [
@@ -125,7 +141,7 @@ def _main(input_shape, num_classes, epochs, batch_size):
         tf.keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=3)
     ]
 
-    # モデル情報表示
+    # モデルの概要を表示
     model.summary()
 
     # モデルの学習
@@ -134,16 +150,17 @@ def _main(input_shape, num_classes, epochs, batch_size):
         epochs=epochs,
         validation_data=gen_validation,
         callbacks=callbacks,
-        batch_size=batch_size)
+        batch_size=batch_size
+    )
 
-    # モデル保存
+    # モデルの保存
     model_name = 'model.keras'
     model.save(model_name)
 
-    # 学習結果グラフ出力
+    # 学習結果のグラフを出力
     plot_result(history)
 
-    # 評価 & 評価結果出力
+    # モデルの評価と結果の出力
     score = model.evaluate(gen_validation)
     print()
     print('Test loss:', score[0])
@@ -156,7 +173,7 @@ if __name__ == "__main__":
     # 分類クラス数
     num_classes = 15
     # エポック数
-    epochs = 30
+    epochs = 250
     # バッチサイズ
     batch_size = 16
     _main(input_shape, num_classes, epochs, batch_size)
